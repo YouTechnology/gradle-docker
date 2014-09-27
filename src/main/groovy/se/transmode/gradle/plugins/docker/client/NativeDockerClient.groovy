@@ -56,28 +56,37 @@ class NativeDockerClient implements DockerClient {
     }
 
     @Override
-    String run(String tag, String containerName, boolean detached, boolean autoRemove, 
-            Map<String, String> env,
+    String run(String tag, String containerName, String hostName, boolean detached, 
+            boolean autoRemove, Map<String, String> env,
             Map<String, String> ports, Map<String, String> volumes, List<String> volumesFrom,
-            List<String> links) {
+            List<String> links, List<String> dnsIps, List<String> searchDomains) {
         Preconditions.checkArgument(tag as Boolean,  "Image tag cannot be empty or null.")
-        Preconditions.checkArgument(containerName as Boolean,  "Image name cannot be empty or null.")
         Preconditions.checkArgument(env != null,  "Environment map cannot be null.")
         Preconditions.checkArgument(ports != null,  "Exported port map cannot be null.")
         Preconditions.checkArgument(volumes != null,  "Volume map cannot be null.")
         Preconditions.checkArgument(volumesFrom != null,  "Volumes from list cannot be null.")
         Preconditions.checkArgument(links != null,  "Link list cannot be null.")
+        Preconditions.checkArgument(dnsIps != null,  "DNS IP list cannot be null.");
+        Preconditions.checkArgument(searchDomains != null,  "DNS search list cannot be null.");
         Preconditions.checkArgument(!detached || !autoRemove,
             "Cannot set both detached and autoRemove options to true.");
 
         def detachedArg = detached ? '-d' : ''
         def removeArg = autoRemove ? '--rm' : ''
-        def cmdLine = "${binary} run ${detachedArg} ${removeArg} --name ${containerName}"
+        def cmdLine = "${binary} run ${detachedArg} ${removeArg}"
+        if (!StringUtils.isEmpty(containerName)) {
+            cmdLine = "$cmdLine --name ${containerName}"
+        }
+        if (!StringUtils.isEmpty(hostName)) {
+            cmdLine = "$cmdLine --hostname ${hostName}"
+        }
         cmdLine = appendArguments(cmdLine, env, "--env", '=')
-        cmdLine = appendArguments(cmdLine, ports, "--publish")
+        cmdLine = appendArgumentsValueFirst(cmdLine, ports, "--publish")
         cmdLine = appendArguments(cmdLine, volumes, "--volume")
         cmdLine = appendArguments(cmdLine, volumesFrom, "--volumes-from")
         cmdLine = appendArguments(cmdLine, links, "--link")
+        cmdLine = appendArguments(cmdLine, dnsIps, "--dns")
+        cmdLine = appendArguments(cmdLine, searchDomains, "--dns-search")
         cmdLine = "${cmdLine} ${tag}"
         return executeAndWait(cmdLine)
     }
@@ -91,7 +100,16 @@ class NativeDockerClient implements DockerClient {
         return cmdLine
     }
 
-            
+    private String appendArgumentsValueFirst(String cmdLine, Map<String, String> map, String option,
+            String separator = ':') {
+        // Add each entry in the map as the indicated argument
+        map.each { key, value ->
+            cmdLine = "${cmdLine} ${option} ${value}${separator}${key}"
+        }
+        return cmdLine
+    }
+    
+    
     private String appendArguments(String cmdLine, List<String> list, String option) {
         // Add each entry in the map as the indicated argument
         list.each {

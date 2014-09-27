@@ -27,12 +27,16 @@ class DockerRunTask extends DockerTaskBase {
     
     String containerName
     
+    String hostName
+    
     boolean detached = false
 
     boolean autoRemove = false
     
     Map<String, String> env
     
+    // This map is indexed by the container port since they are unique in the case where
+    // we publish more than one protocol.
     Map<String, String> ports
     
     Map<String, String> volumes
@@ -41,19 +45,26 @@ class DockerRunTask extends DockerTaskBase {
     
     List<String> links
     
+    List<String> dnsServers
+    
+    List<String> searchDomains
+    
     DockerRunTask() {
         env = [:]
         ports = [:]
         volumes = [:]
         volumesFrom = []
         links = []
+        dnsServers = []
+        searchDomains = []
     }
     
     @TaskAction
     public void run() {
         DockerClient client = getClient()
-        client.run(getImageTag(), getContainerName(), getDetached(), getAutoRemove(), getEnv(), 
-            getPorts(), getVolumes(), getVolumesFrom(), getLinks())
+        client.run(getImageTag(), getContainerName(), getHostName(), getDetached(), getAutoRemove(), 
+            getEnv(), getPorts(), getVolumes(), getVolumesFrom(), getLinks(), getDnsServers(),
+            getSearchDomains())
     }
     
     void env(String key, String value) {
@@ -61,7 +72,7 @@ class DockerRunTask extends DockerTaskBase {
     }
     
     void publish(String host, String container) {
-        ports.put(host, container)
+        ports.put(container, host)
     }
     
     void volume(String host, String container) {
@@ -74,5 +85,13 @@ class DockerRunTask extends DockerTaskBase {
     
     void link(String containerName) {
         links.add(containerName)
+    }
+    
+    void dns(String dnsIP) {
+        dnsServers.add(dnsIP)
+    }
+    
+    void dnsSearch(String domain) {
+        searchDomains.add(domain)
     }
 }

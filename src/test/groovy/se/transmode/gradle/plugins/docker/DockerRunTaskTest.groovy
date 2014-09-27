@@ -83,6 +83,7 @@ class DockerRunTaskTest {
     }
 
     private static final String CONTAINER_NAME = 'mycontainer'
+    private static final String HOST_NAME = 'myhost'
         
     private Project createProject() {
         Project project = ProjectBuilder.builder().build()
@@ -105,9 +106,10 @@ class DockerRunTaskTest {
     public void runDefault() {
         def project = createProject()
         project.dockerRunTask.run()
-        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null),
+        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null), eq(null),
             eq(false), eq(false), argThat(isEmptyMap), argThat(isEmptyMap), 
-            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isEmptyCollection))
+            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isEmptyCollection),
+            , argThat(isEmptyCollection), argThat(isEmptyCollection))
     }
     
     @Test
@@ -115,9 +117,21 @@ class DockerRunTaskTest {
         def project = createProject()
         project.dockerRunTask.containerName = CONTAINER_NAME
         project.dockerRunTask.run()
-        verify(project.dockerRunTask.mockClient).run(anyString(), eq(CONTAINER_NAME),
+        verify(project.dockerRunTask.mockClient).run(anyString(), eq(CONTAINER_NAME), eq(null),
             eq(false), eq(false), argThat(isEmptyMap), argThat(isEmptyMap), 
-            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isEmptyCollection))
+            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isEmptyCollection),
+            , argThat(isEmptyCollection), argThat(isEmptyCollection))
+    }
+
+    @Test
+    public void runWithHostName() {
+        def project = createProject()
+        project.dockerRunTask.hostName = HOST_NAME
+        project.dockerRunTask.run()
+        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null), eq(HOST_NAME),
+            eq(false), eq(false), argThat(isEmptyMap), argThat(isEmptyMap), 
+            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isEmptyCollection),
+            , argThat(isEmptyCollection), argThat(isEmptyCollection))
     }
 
     @Test
@@ -125,9 +139,10 @@ class DockerRunTaskTest {
         def project = createProject()
         project.dockerRunTask.detached = true
         project.dockerRunTask.run()
-        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null),
+        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null), eq(null),
             eq(true), eq(false), argThat(isEmptyMap), argThat(isEmptyMap), 
-            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isEmptyCollection))
+            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isEmptyCollection),
+            , argThat(isEmptyCollection), argThat(isEmptyCollection))
     }
     
     @Test
@@ -135,9 +150,10 @@ class DockerRunTaskTest {
         def project = createProject()
         project.dockerRunTask.autoRemove = true
         project.dockerRunTask.run()
-        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null),
+        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null), eq(null),
             eq(false), eq(true), argThat(isEmptyMap), argThat(isEmptyMap), 
-            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isEmptyCollection))
+            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isEmptyCollection),
+            , argThat(isEmptyCollection), argThat(isEmptyCollection))
     }
     
     @Test
@@ -145,9 +161,10 @@ class DockerRunTaskTest {
         def project = createProject()
         project.dockerRunTask.env("foo", "bar")
         project.dockerRunTask.run()
-        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null),
+        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null), eq(null),
             eq(false), eq(false), argThat(isSingletonMap), argThat(isEmptyMap), 
-            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isEmptyCollection))
+            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isEmptyCollection),
+            , argThat(isEmptyCollection), argThat(isEmptyCollection))
     }
     
     @Test
@@ -155,9 +172,10 @@ class DockerRunTaskTest {
         def project = createProject()
         project.dockerRunTask.publish("foo", "bar")
         project.dockerRunTask.run()
-        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null),
+        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null), eq(null),
             eq(false), eq(false), argThat(isEmptyMap), argThat(isSingletonMap), 
-            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isEmptyCollection))
+            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isEmptyCollection),
+            , argThat(isEmptyCollection), argThat(isEmptyCollection))
     }
     
     @Test
@@ -165,9 +183,10 @@ class DockerRunTaskTest {
         def project = createProject()
         project.dockerRunTask.volume("foo", "bar")
         project.dockerRunTask.run()
-        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null),
+        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null), eq(null),
             eq(false), eq(false), argThat(isEmptyMap), argThat(isEmptyMap), 
-            argThat(isSingletonMap), argThat(isEmptyCollection), argThat(isEmptyCollection))
+            argThat(isSingletonMap), argThat(isEmptyCollection), argThat(isEmptyCollection),
+            , argThat(isEmptyCollection), argThat(isEmptyCollection))
     }
     
     @Test
@@ -175,9 +194,10 @@ class DockerRunTaskTest {
         def project = createProject()
         project.dockerRunTask.volumesFrom("foo")
         project.dockerRunTask.run()
-        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null),
+        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null), eq(null),
             eq(false), eq(false), argThat(isEmptyMap), argThat(isEmptyMap), 
-            argThat(isEmptyMap), argThat(isSingletonCollection), argThat(isEmptyCollection))
+            argThat(isEmptyMap), argThat(isSingletonCollection), argThat(isEmptyCollection),
+            , argThat(isEmptyCollection), argThat(isEmptyCollection))
     }
     
     @Test
@@ -185,9 +205,10 @@ class DockerRunTaskTest {
         def project = createProject()
         project.dockerRunTask.link("foo")
         project.dockerRunTask.run()
-        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null),
+        verify(project.dockerRunTask.mockClient).run(anyString(), eq(null), eq(null),
             eq(false), eq(false), argThat(isEmptyMap), argThat(isEmptyMap), 
-            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isSingletonCollection))
+            argThat(isEmptyMap), argThat(isEmptyCollection), argThat(isSingletonCollection),
+            , argThat(isEmptyCollection), argThat(isEmptyCollection))
     }
     
     @Test(expected = IllegalArgumentException.class)

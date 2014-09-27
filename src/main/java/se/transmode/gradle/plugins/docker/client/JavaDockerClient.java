@@ -16,84 +16,76 @@
 package se.transmode.gradle.plugins.docker.client;
 
 import java.io.File;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
 import org.apache.commons.lang.StringUtils;
-import org.gradle.api.GradleException;
-import org.gradle.api.logging.Logger;
-import org.gradle.api.logging.Logging;
 
-import com.github.dockerjava.client.NotFoundException;
-import com.github.dockerjava.client.command.CreateContainerCmd;
-import com.github.dockerjava.client.command.StartContainerCmd;
-import com.github.dockerjava.client.model.Bind;
-import com.github.dockerjava.client.model.ContainerCreateResponse;
-import com.github.dockerjava.client.model.Link;
-import com.github.dockerjava.client.model.Volume;
+import com.github.dockerjava.api.NotFoundException;
+import com.github.dockerjava.api.command.CreateContainerCmd;
+import com.github.dockerjava.api.command.CreateContainerResponse;
+import com.github.dockerjava.api.command.StartContainerCmd;
+import com.github.dockerjava.api.model.Bind;
+import com.github.dockerjava.api.model.ExposedPort;
+import com.github.dockerjava.api.model.Link;
+import com.github.dockerjava.api.model.Ports;
+import com.github.dockerjava.api.model.Ports.Binding;
+import com.github.dockerjava.api.model.Volume;
+import com.github.dockerjava.core.DockerClientConfig;
+import com.github.dockerjava.core.DockerClientConfig.DockerClientConfigBuilder;
+import com.github.dockerjava.core.DockerClientImpl;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.sun.jersey.api.client.ClientResponse;
+import com.google.common.io.ByteStreams;
 
-public class JavaDockerClient extends com.github.dockerjava.client.DockerClient implements DockerClient {
+public class JavaDockerClient extends DockerClientImpl implements DockerClient {
 
-    private static Logger log = Logging.getLogger(JavaDockerClient.class);
-
-    JavaDockerClient() {
-        super();
-    }
-
-    JavaDockerClient(String url) {
-        super(url);
+    JavaDockerClient(DockerClientConfig config) {
+        super(config);
     }
 
     @Override
     public String buildImage(File buildDir, String tag) {
         Preconditions.checkNotNull(tag, "Image tag can not be null.");
         Preconditions.checkArgument(!tag.isEmpty(),  "Image tag can not be empty.");
-        ClientResponse response = buildImageCmd(buildDir).withTag(tag).exec();
-        return checkResponse(response);
+        try (InputStream output = buildImageCmd(buildDir).withTag(tag).exec()) {
+            ByteStreams.copy(output, System.out);
+        } catch (Exception e) {
+            throw new RuntimeException("Encountered exception building image: " + e.getMessage(), e);
+        }
+        return "Done";
     }
 
     @Override
     public String pushImage(String tag) {
         Preconditions.checkNotNull(tag, "Image tag can not be null.");
         Preconditions.checkArgument(!tag.isEmpty(),  "Image tag can not be empty.");
-        ClientResponse response = pushImageCmd(tag).exec();
-        return checkResponse(response);
-    }
-
-    private static String checkResponse(ClientResponse response) {
-        String msg = response.getEntity(String.class);
-        if (response.getStatusInfo() != ClientResponse.Status.OK) {
-            throw new GradleException(
-                    "Docker API error: Failed to build Image:\n"+msg);
+        try (InputStream output = pushImageCmd(tag).exec()) {
+            ByteStreams.copy(output, System.out);
+        } catch (Exception e) {
+            throw new RuntimeException("Encountered exception pushing image: " + e.getMessage(), e);
         }
-        return msg;
+        return "Done";
     }
 
     public static JavaDockerClient create(String url, String user, String password, String email) {
-        JavaDockerClient client;
-        if (StringUtils.isEmpty(url)) {
-            log.info("Connecting to localhost");
-            // TODO -- use no-arg constructor once we switch to java-docker 0.9.1
-            client = new JavaDockerClient("http://localhost:2375");
-        } else {
-            log.info("Connecting to {}", url);
-            client = new JavaDockerClient(url);
+        DockerClientConfigBuilder builder = DockerClientConfig.createDefaultConfigBuilder()
+                .withUsername(user)
+                .withPassword(password)
+                .withEmail(email);
+        if (!StringUtils.isEmpty(url)) {
+            builder.withUri(url);
         }
-
-        if (StringUtils.isNotEmpty(user)) {
-            client.setCredentials(user, password, email);
-        }
-
-        return client;
+        return new JavaDockerClient(builder.build());
     }
 
     @Override
-    public String run(String tag, String containerName, boolean detached, boolean autoRemove,
-            Map<String, String> env, Map<String, String> ports, Map<String, String> volumes, 
-            List<String> volumesFrom, List<String> links) {
+    public String run(String tag, String containerName, String hostName, boolean detached, 
+            boolean autoRemove, Map<String, String> env, Map<String, String> ports, 
+            Map<String, String> volumes, List<String> volumesFrom, List<String> links,
+            List<String> dnsIps, List<String> searchDomains) {
         
         Preconditions.checkArgument(!StringUtils.isEmpty(tag),  
                 "Image tag cannot be empty or null.");
@@ -102,21 +94,24 @@ public class JavaDockerClient extends com.github.dockerjava.client.DockerClient 
         Preconditions.checkArgument(volumes != null,  "Volume map cannot be null.");
         Preconditions.checkArgument(volumesFrom != null,  "Volumes from list cannot be null.");
         Preconditions.checkArgument(links != null,  "Link list cannot be null.");
+        Preconditions.checkArgument(dnsIps != null,  "DNS IP list cannot be null.");
+        Preconditions.checkArgument(searchDomains != null,  "DNS search list cannot be null.");
         Preconditions.checkArgument(!detached || !autoRemove, 
                 "Cannot set both detached and autoRemove options to true.");
         
         // Start by creating the container
-        CreateContainerCmd createCmd = createContainerCmd(tag).withName(containerName);
-        String[] envList = new String[env.size()];
-        int index = 0;
-        for (Entry<String, String> entry : env.entrySet()) {
-            String envSetting = String.format("%s=%s", entry.getKey(), entry.getValue());
-            envList[index++] = envSetting;
+        CreateContainerCmd createCmd = createContainerCmd(tag);
+        if (!StringUtils.isEmpty(containerName)) {
+            createCmd.withName(containerName);
         }
-        createCmd.withEnv(envList);
-        ContainerCreateResponse createResponse;
+        if (!StringUtils.isEmpty(hostName)) {
+            createCmd.withHostName(hostName);
+        }
+        createCmd.withEnv(constructEnvironment(env));
+        createCmd.withExposedPorts(constructExposedPorts(ports));
+        CreateContainerResponse createResponse;
         try {
-            createResponse = createContainerCmd(tag).exec();
+            createResponse = createCmd.exec();
         } catch (NotFoundException nfe) {
             // TODO have option to pull image
             throw nfe;
@@ -125,23 +120,11 @@ public class JavaDockerClient extends com.github.dockerjava.client.DockerClient 
         
         // Configure start command
         StartContainerCmd startCmd = startContainerCmd(containerId);
-        Bind[] binds = new Bind[volumes.size()];
-        index = 0;
-        for (Entry<String, String> entry : volumes.entrySet()) {
-            Volume vol = new Volume(entry.getValue());
-            Bind bind = new Bind(entry.getKey(), vol);
-            binds[index++] = bind;
-        }
-        startCmd.withBinds(binds);
+        startCmd.withBinds(constructBinds(volumes));
         startCmd.withVolumesFrom(StringUtils.join(volumesFrom, ","));
-        Link[] linkArr = new Link[links.size()];
-        index = 0;
-        for (String linkStr : links) {
-            String[] values = linkStr.split(":");
-            Link link = new Link(values[0], values.length == 2 ? values[1] : values[0]);
-            linkArr[index++] = link;
-        }
-        startCmd.withLinks(linkArr);
+        startCmd.withLinks(constructLinks(links));
+        startCmd.withPortBindings(constructPorts(ports));
+        startCmd.withDns(dnsIps.toArray(new String[dnsIps.size()]));
         
         // Start the container
         try {
@@ -160,7 +143,82 @@ public class JavaDockerClient extends com.github.dockerjava.client.DockerClient 
             return waitForExit(containerId);
         }
     }
+
+    @VisibleForTesting
+    static String[] constructEnvironment(Map<String, String> env) {
+        String[] envList = new String[env.size()];
+        int index = 0;
+        for (Entry<String, String> entry : env.entrySet()) {
+            String envSetting = String.format("%s=%s", entry.getKey(), entry.getValue());
+            envList[index++] = envSetting;
+        }
+        return envList;
+    }
+
+    @VisibleForTesting
+    static ExposedPort[] constructExposedPorts(Map<String, String> ports) {
+        int index = 0;
+        ExposedPort[] exposedPorts = new ExposedPort[ports.size()];
+        for (Entry<String, String> entry : ports.entrySet()) {
+            exposedPorts[index++] = createExposedPort(entry.getKey());
+        }
+        return exposedPorts;
+    }
+
+    private static ExposedPort createExposedPort(String value) {
+        ExposedPort exposedPort;
+        if (value.indexOf('/') > -1) {
+            exposedPort = ExposedPort.parse(value);
+        } else {
+            exposedPort = ExposedPort.tcp(Integer.parseInt(value));
+        }
+        return exposedPort;
+    }
+
+    @VisibleForTesting
+    static Bind[] constructBinds(Map<String, String> volumes) {
+        int index;
+        Bind[] binds = new Bind[volumes.size()];
+        index = 0;
+        for (Entry<String, String> entry : volumes.entrySet()) {
+            Volume vol = new Volume(entry.getValue());
+            Bind bind = new Bind(entry.getKey(), vol);
+            binds[index++] = bind;
+        }
+        return binds;
+    }
     
+    @VisibleForTesting
+    static Link[] constructLinks(List<String> links) {
+        int index;
+        Link[] linkArr = new Link[links.size()];
+        index = 0;
+        for (String linkStr : links) {
+            String[] values = linkStr.split(":");
+            Link link = new Link(values[0], values.length == 2 ? values[1] : values[0]);
+            linkArr[index++] = link;
+        }
+        return linkArr;
+    }
+
+    @VisibleForTesting
+    static Ports constructPorts(Map<String, String> portMappings) {
+        Ports ports = new Ports();
+        for (Entry<String, String> entry : portMappings.entrySet()) {
+            // Construct host port binding
+            Binding hostBinding;
+            String[] hostAddr = entry.getValue().split(":");
+            if (hostAddr.length == 1) {
+                hostBinding = Ports.Binding("0.0.0.0", Integer.parseInt(hostAddr[0]));
+            } else {
+                hostBinding = Ports.Binding(hostAddr[0], Integer.parseInt(hostAddr[1]));
+            }
+            
+            ports.bind(createExposedPort(entry.getKey()), hostBinding);
+        }
+        return ports;
+    }
+
     private String removeOnExit(String containerId) {
         String exitStatus = waitForExit(containerId);
         removeContainerCmd(containerId).exec();

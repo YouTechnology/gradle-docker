@@ -51,7 +51,8 @@ public interface DockerClient {
      * @param links a list of the containers to which the newly created container should be linked
      * @return the output of the command
      */
-    public String run(String tag, String containerName, boolean detached, boolean autoRemove,
-            Map<String, String> env, Map<String, String> ports, Map<String, String> volumes, 
-            List<String> volumesFrom, List<String> links);
+    public String run(String tag, String containerName, String hostName, boolean detached, 
+            boolean autoRemove, Map<String, String> env, Map<String, String> ports, 
+            Map<String, String> volumes, List<String> volumesFrom, List<String> links,
+            List<String> dnsIps, List<String> searchDomains);
 }
