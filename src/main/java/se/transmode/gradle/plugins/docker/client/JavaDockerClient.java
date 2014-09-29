@@ -45,7 +45,27 @@ public class JavaDockerClient implements DockerClient {
     private final com.github.dockerjava.api.DockerClient client;
 
     /**
-     * Create a client which uses the REST API to interact with the Docker server.
+     * Factory for a client which uses the Java REST API to communicate with the server.
+     * 
+     * @param url
+     * @param user
+     * @param password
+     * @param email
+     * @return
+     */
+    public static JavaDockerClient create(String url, String user, String password, String email) {
+        DockerClientConfigBuilder builder = DockerClientConfig.createDefaultConfigBuilder()
+                .withUsername(user)
+                .withPassword(password)
+                .withEmail(email);
+        if (!StringUtils.isEmpty(url)) {
+            builder.withUri(url);
+        }
+        return new JavaDockerClient(builder.build());
+    }
+
+    /**
+     * Construct a client which uses the REST API to interact with the Docker server.
      */
     JavaDockerClient(DockerClientConfig config) {
         client = DockerClientBuilder.getInstance(config).build();
@@ -73,17 +93,6 @@ public class JavaDockerClient implements DockerClient {
             throw new RuntimeException("Encountered exception pushing image: " + e.getMessage(), e);
         }
         return "Done";
-    }
-
-    public static JavaDockerClient create(String url, String user, String password, String email) {
-        DockerClientConfigBuilder builder = DockerClientConfig.createDefaultConfigBuilder()
-                .withUsername(user)
-                .withPassword(password)
-                .withEmail(email);
-        if (!StringUtils.isEmpty(url)) {
-            builder.withUri(url);
-        }
-        return new JavaDockerClient(builder.build());
     }
 
     @Override
