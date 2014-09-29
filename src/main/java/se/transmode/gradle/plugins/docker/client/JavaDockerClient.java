@@ -35,22 +35,27 @@ import com.github.dockerjava.api.model.Ports.Binding;
 import com.github.dockerjava.api.model.Volume;
 import com.github.dockerjava.core.DockerClientConfig;
 import com.github.dockerjava.core.DockerClientConfig.DockerClientConfigBuilder;
-import com.github.dockerjava.core.DockerClientImpl;
+import com.github.dockerjava.jaxrs.DockerClientBuilder;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.io.ByteStreams;
 
-public class JavaDockerClient extends DockerClientImpl implements DockerClient {
+public class JavaDockerClient implements DockerClient {
+    
+    private final com.github.dockerjava.api.DockerClient client;
 
+    /**
+     * Create a client which uses the REST API to interact with the Docker server.
+     */
     JavaDockerClient(DockerClientConfig config) {
-        super(config);
+        client = DockerClientBuilder.getInstance(config).build();
     }
 
     @Override
     public String buildImage(File buildDir, String tag) {
         Preconditions.checkNotNull(tag, "Image tag can not be null.");
         Preconditions.checkArgument(!tag.isEmpty(),  "Image tag can not be empty.");
-        try (InputStream output = buildImageCmd(buildDir).withTag(tag).exec()) {
+        try (InputStream output = client.buildImageCmd(buildDir).withTag(tag).exec()) {
             ByteStreams.copy(output, System.out);
         } catch (Exception e) {
             throw new RuntimeException("Encountered exception building image: " + e.getMessage(), e);
@@ -62,7 +67,7 @@ public class JavaDockerClient extends DockerClientImpl implements DockerClient {
     public String pushImage(String tag) {
         Preconditions.checkNotNull(tag, "Image tag can not be null.");
         Preconditions.checkArgument(!tag.isEmpty(),  "Image tag can not be empty.");
-        try (InputStream output = pushImageCmd(tag).exec()) {
+        try (InputStream output = client.pushImageCmd(tag).exec()) {
             ByteStreams.copy(output, System.out);
         } catch (Exception e) {
             throw new RuntimeException("Encountered exception pushing image: " + e.getMessage(), e);
@@ -100,7 +105,7 @@ public class JavaDockerClient extends DockerClientImpl implements DockerClient {
                 "Cannot set both detached and autoRemove options to true.");
         
         // Start by creating the container
-        CreateContainerCmd createCmd = createContainerCmd(tag);
+        CreateContainerCmd createCmd = client.createContainerCmd(tag);
         if (!StringUtils.isEmpty(containerName)) {
             createCmd.withName(containerName);
         }
@@ -119,7 +124,7 @@ public class JavaDockerClient extends DockerClientImpl implements DockerClient {
         String containerId = createResponse.getId();
         
         // Configure start command
-        StartContainerCmd startCmd = startContainerCmd(containerId);
+        StartContainerCmd startCmd = client.startContainerCmd(containerId);
         startCmd.withBinds(constructBinds(volumes));
         startCmd.withVolumesFrom(StringUtils.join(volumesFrom, ","));
         startCmd.withLinks(constructLinks(links));
@@ -131,7 +136,7 @@ public class JavaDockerClient extends DockerClientImpl implements DockerClient {
             startCmd.exec();
         } catch (Exception e) {
             // Want to get rid of container we created
-            removeContainerCmd(containerId).exec();
+            client.removeContainerCmd(containerId).exec();
         }
        
         // Should we wait around and/or remove the container on exit
@@ -221,12 +226,12 @@ public class JavaDockerClient extends DockerClientImpl implements DockerClient {
 
     private String removeOnExit(String containerId) {
         String exitStatus = waitForExit(containerId);
-        removeContainerCmd(containerId).exec();
+        client.removeContainerCmd(containerId).exec();
         return exitStatus;
     }
 
     private String waitForExit(String containerId) {
         // TODO -- show container output if/when we get that option from docker-java
-        return "Exit status: " + waitContainerCmd(containerId).exec();
+        return "Exit status: " + client.waitContainerCmd(containerId).exec();
     }
 }
